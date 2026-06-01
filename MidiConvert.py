@@ -1,188 +1,327 @@
-from decimal import *
-import midi
+"""Convert a MIDI file into an Arduino sketch (.ino) for a passive buzzer.
+
+Usage:
+    python3 MidiConvert.py -i song.mid --list-tracks
+    python3 MidiConvert.py -i song.mid -o song.ino --track 1
+    python3 MidiConvert.py -i song.mid -o song.ino --per-line 24
+"""
+
 import argparse
-
-argsp = argparse.ArgumentParser()
-argsp.add_argument('-o', '--output', type=str, help='output g-code file to generate (Default: song.gcode)', required=False, default="song.gcode")
-
-requiredNamed = argsp.add_argument_group('required arguments')
-requiredNamed.add_argument('-i', '--input', type=str, help='input midi file to convert', required=True)
-
-args = argsp.parse_args()
-
-# This lets us convert from Midi # to frequency
-MIDI_NUMBERS = {
-    0 : 8.1757989156,
-    1 : 8.6619572180,
-    2 : 9.1770239974,
-    3 : 9.7227182413,
-    4 : 10.3008611535,
-    5 : 10.9133822323,
-    6 : 11.5623257097,
-    7 : 12.2498573744,
-    8 : 12.9782717994,
-    9 : 13.7500000000,
-    10 : 14.5676175474,
-    11 : 15.4338531643,
-    12 : 16.3515978313,
-    13 : 17.3239144361,
-    14 : 18.3540479948,
-    15 : 19.4454364826,
-    16 : 20.6017223071,
-    17 : 21.8267644646,
-    18 : 23.1246514195,
-    19 : 24.4997147489,
-    20 : 25.9565435987,
-    21 : 27.5000000000,
-    22 : 29.1352350949,
-    23 : 30.8677063285,
-    24 : 32.7031956626,
-    25 : 34.6478288721,
-    26 : 36.7080959897,
-    27 : 38.8908729653,
-    28 : 41.2034446141,
-    29 : 43.6535289291,
-    30 : 46.2493028390,
-    31 : 48.9994294977,
-    32 : 51.9130871975,
-    33 : 55.0000000000,
-    34 : 58.2704701898,
-    35 : 61.7354126570,
-    36 : 65.4063913251,
-    37 : 69.2956577442,
-    38 : 73.4161919794,
-    39 : 77.7817459305,
-    40 : 82.4068892282,
-    41 : 87.3070578583,
-    42 : 92.4986056779,
-    43 : 97.9988589954,
-    44 : 103.8261743950,
-    45 : 110.0000000000,
-    46 : 116.5409403795,
-    47 : 123.4708253140,
-    48 : 130.8127826503,
-    49 : 138.5913154884,
-    50 : 146.8323839587,
-    51 : 155.5634918610,
-    52 : 164.8137784564,
-    53 : 174.6141157165,
-    54 : 184.9972113558,
-    55 : 195.9977179909,
-    56 : 207.6523487900,
-    57 : 220.0000000000,
-    58 : 233.0818807590,
-    59 : 246.9416506281,
-    60 : 261.6255653006,
-    61 : 277.1826309769,
-    62 : 293.6647679174,
-    63 : 311.1269837221,
-    64 : 329.6275569129,
-    65 : 349.2282314330,
-    66 : 369.9944227116,
-    67 : 391.9954359817,
-    68 : 415.3046975799,
-    69 : 440.0000000000,
-    70 : 466.1637615181,
-    71 : 493.8833012561,
-    72 : 523.2511306012,
-    73 : 554.3652619537,
-    74 : 587.3295358348,
-    75 : 622.2539674442,
-    76 : 659.2551138257,
-    77 : 698.4564628660,
-    78 : 739.9888454233,
-    79 : 783.9908719635,
-    80 : 830.6093951599,
-    81 : 880.0000000000,
-    82 : 932.3275230362,
-    83 : 987.7666025122,
-    84 : 1046.5022612024,
-    85 : 1108.7305239075,
-    86 : 1174.6590716696,
-    87 : 1244.5079348883,
-    88 : 1318.5102276515,
-    89 : 1396.9129257320,
-    90 : 1479.9776908465,
-    91 : 1567.9817439270,
-    92 : 1661.2187903198,
-    93 : 1760.0000000000,
-    94 : 1864.6550460724,
-    95 : 1975.5332050245,
-    96 : 2093.0045224048,
-    97 : 2217.4610478150,
-    98 : 2349.3181433393,
-    99 : 2489.0158697766,
-    100 : 2637.0204553030,
-    101 : 2793.8258514640,
-    102 : 2959.9553816931,
-    103 : 3135.9634878540,
-    104 : 3322.4375806396,
-    105 : 3520.0000000000,
-    106 : 3729.3100921447,
-    107 : 3951.0664100490,
-    108 : 4186.009044809,
-    109 : 4434.922095630,
-    110 : 4698.636286678,
-    111 : 4978.031739553,
-    112 : 5274.040910605,
-    113 : 5587.651702928,
-    114 : 5919.910763386,
-    115 : 6271.926975708,
-    116 : 6644.875161279,
-    117 : 7040.000000000,
-    118 : 7458.620234756,
-    119 : 7902.132834658,
-    120 : 8372.0180896192,
-    121 : 8869.8441912599,
-    122 : 9397.2725733570,
-    123 : 9956.0634791066,
-    124 : 10548.0818212118,
-    125 : 11175.3034058561,
-    126 : 11839.8215267723,
-    127 : 12543.8539514160
-    }
-
-tempo = 120 # Default tempo for midi is 120 bpm
-
-gcode = []
-currentCode = None
-
-pattern = midi.read_midifile(args.input)
+import mido
 
 
-for track in pattern[:]:
-    # Some patterns have multiple tracks. These tracks
-    # can sometimes be stuff like resolution and tempo
-    # For now this is gonna stay simple, and only deal
-    # with single track data (type 0)
-    for event in track[:]:
-        # We care about:
-        #   TimeSignatureEvent (But not right now)
-        #   SetTempoEvent (But not right now)
-        #   NoteOnEvent
-        #   NoteOffEvent
-        
-        # Note that we can only convert midis that don't have overlapping
-        # notes!
-        
-        #now we find each NoteOnEvent, and convert it to gcode       
-       
-        if event.name == "Note On" and event.velocity != 0:
-            # First convert Midi number to frequency
-            currentCode = "M300 S" + str(MIDI_NUMBERS[event.get_pitch()]) + " P"
+GM_INSTRUMENTS = [
+    "Acoustic Grand Piano", "Bright Piano", "Electric Grand Piano", "Honky-tonk Piano",
+    "Electric Piano 1", "Electric Piano 2", "Harpsichord", "Clavinet",
+    "Celesta", "Glockenspiel", "Music Box", "Vibraphone", "Marimba", "Xylophone",
+    "Tubular Bells", "Dulcimer", "Drawbar Organ", "Percussive Organ", "Rock Organ",
+    "Church Organ", "Reed Organ", "Accordion", "Harmonica", "Tango Accordion",
+    "Nylon Guitar", "Steel Guitar", "Jazz Guitar", "Clean Electric Guitar",
+    "Muted Electric Guitar", "Overdriven Guitar", "Distortion Guitar", "Guitar Harmonics",
+    "Acoustic Bass", "Fingered Bass", "Picked Bass", "Fretless Bass",
+    "Slap Bass 1", "Slap Bass 2", "Synth Bass 1", "Synth Bass 2",
+    "Violin", "Viola", "Cello", "Contrabass", "Tremolo Strings", "Pizzicato Strings",
+    "Orchestral Harp", "Timpani", "String Ensemble 1", "String Ensemble 2",
+    "Synth Strings 1", "Synth Strings 2", "Choir Aahs", "Voice Oohs",
+    "Synth Voice", "Orchestra Hit", "Trumpet", "Trombone", "Tuba", "Muted Trumpet",
+    "French Horn", "Brass Section", "Synth Brass 1", "Synth Brass 2",
+    "Soprano Sax", "Alto Sax", "Tenor Sax", "Baritone Sax",
+    "Oboe", "English Horn", "Bassoon", "Clarinet",
+    "Piccolo", "Flute", "Recorder", "Pan Flute", "Blown Bottle", "Shakuhachi",
+    "Whistle", "Ocarina", "Square Lead", "Saw Lead", "Calliope Lead", "Chiff Lead",
+    "Charang Lead", "Voice Lead", "Fifths Lead", "Bass + Lead",
+    "New Age Pad", "Warm Pad", "Polysynth Pad", "Choir Pad", "Bowed Pad",
+    "Metallic Pad", "Halo Pad", "Sweep Pad", "Rain FX", "Soundtrack FX",
+    "Crystal FX", "Atmosphere FX", "Brightness FX", "Goblins FX", "Echoes FX",
+    "Sci-fi FX", "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba", "Bagpipe",
+    "Fiddle", "Shanai", "Tinkle Bell", "Agogo", "Steel Drums", "Woodblock",
+    "Taiko Drum", "Melodic Tom", "Synth Drum", "Reverse Cymbal", "Guitar Fret Noise",
+    "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter",
+    "Applause", "Gunshot",
+]
 
-        #Some midi files give note offs, some give Note Ons with a velocity of 0 to denote the end of a note
-        if (event.name == "Note Off" or (event.name == "Note On" and event.velocity == 0)) and currentCode != None:
-            #add the delay 
-            delay = event.tick * 0.001
-            currentCode = currentCode + str(delay * 1000) # Need to convert seconds to millis for Marlin
-            gcode.append(currentCode)
-            currentCode = None
 
-#print gcode
+def midi_to_freq(note: int) -> int:
+    return int(round(440.0 * (2.0 ** ((note - 69) / 12.0))))
 
-#Export gcode to a file:
-with open(args.output, 'w') as theFile:
-    for item in gcode:
-        theFile.write("%s\n" % item)
 
+def analyze_tracks(midi_path: str):
+    """Renvoie une liste de dicts decrivant chaque piste."""
+    mid = mido.MidiFile(midi_path)
+    infos = []
+    for idx, track in enumerate(mid.tracks):
+        name = ""
+        program = None
+        notes = []
+        channels = set()
+        is_drums = False
+        for msg in track:
+            if msg.type == "track_name":
+                name = msg.name
+            elif msg.type == "program_change":
+                program = msg.program
+            elif msg.type == "note_on" and msg.velocity > 0:
+                notes.append(msg.note)
+                channels.add(msg.channel)
+                if msg.channel == 9:
+                    is_drums = True
+        infos.append({
+            "index": idx,
+            "name": name,
+            "program": program,
+            "instrument": GM_INSTRUMENTS[program] if program is not None and program < 128 else "",
+            "note_count": len(notes),
+            "mean_pitch": sum(notes) / len(notes) if notes else 0.0,
+            "min_pitch": min(notes) if notes else None,
+            "max_pitch": max(notes) if notes else None,
+            "channels": sorted(channels),
+            "is_drums": is_drums,
+        })
+    return infos
+
+
+def list_tracks(midi_path: str):
+    infos = analyze_tracks(midi_path)
+    print(f"Pistes de {midi_path} :")
+    print(f"{'#':>2}  {'Notes':>6}  {'Moy':>4}  {'Min':>4}  {'Max':>4}  Nom / Instrument")
+    print("-" * 70)
+    for info in infos:
+        flag = " [DRUMS]" if info["is_drums"] else ""
+        label = info["name"] or info["instrument"] or "(sans nom)"
+        if info["note_count"] == 0:
+            print(f"{info['index']:>2}  {'-':>6}  {'-':>4}  {'-':>4}  {'-':>4}  {label} (vide / meta)")
+        else:
+            print(f"{info['index']:>2}  {info['note_count']:>6}  "
+                  f"{info['mean_pitch']:>4.0f}  {info['min_pitch']:>4}  {info['max_pitch']:>4}  "
+                  f"{label}{flag}")
+
+
+def pick_melody_track(infos):
+    """Heuristique pour trouver la melodie principale:
+    1) Si un nom de piste evoque la melodie ("melod", "lead", "voice", "vocal",
+       "song", "main"), on prend celui-la.
+    2) Sinon, parmi les pistes avec assez de notes (>= 20% du max),
+       on prend celle de hauteur moyenne la plus elevee.
+    """
+    candidates = [i for i in infos if i["note_count"] > 0 and not i["is_drums"]]
+    if not candidates:
+        return None
+
+    KEYWORDS = ("melod", "lead", "voice", "vocal", "song", "main", "chant")
+    for info in candidates:
+        name_lc = (info["name"] or "").lower()
+        if any(kw in name_lc for kw in KEYWORDS):
+            return info["index"]
+
+    max_count = max(i["note_count"] for i in candidates)
+    threshold = max(20, int(max_count * 0.2))
+    substantial = [i for i in candidates if i["note_count"] >= threshold]
+    substantial.sort(key=lambda i: i["mean_pitch"], reverse=True)
+    return substantial[0]["index"] if substantial else candidates[0]["index"]
+
+
+def extract_segments(midi_path: str, track_index=None):
+    """Renvoie une liste de (frequence_Hz, duree_ms).
+
+    Si `track_index` est fourni, seules les notes de cette piste sont prises
+    en compte (le tempo reste partage entre toutes les pistes). Sinon, toutes
+    les pistes sont fusionnees et on garde la note la plus aigue (skyline).
+    """
+    mid = mido.MidiFile(midi_path)
+    ticks_per_beat = mid.ticks_per_beat
+    tempo = 500000
+
+    events = []  # (time_seconds, type, note)
+
+    if track_index is None:
+        # Mode skyline: toutes les pistes fusionnees.
+        abs_seconds = 0.0
+        for msg in mido.merge_tracks(mid.tracks):
+            abs_seconds += mido.tick2second(msg.time, ticks_per_beat, tempo)
+            if msg.type == "set_tempo":
+                tempo = msg.tempo
+            elif msg.type == "note_on" and msg.velocity > 0 and msg.channel != 9:
+                events.append((abs_seconds, "on", msg.note))
+            elif (msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0)) and msg.channel != 9:
+                events.append((abs_seconds, "off", msg.note))
+    else:
+        # Mode piste unique: parcourt TOUTES les pistes pour suivre le tempo,
+        # mais ne retient que les notes de la piste cible.
+        # On utilise un parcours synchronise via les ticks absolus.
+        per_track = []
+        for idx, track in enumerate(mid.tracks):
+            t = 0
+            track_events = []
+            for msg in track:
+                t += msg.time
+                track_events.append((t, idx, msg))
+            per_track.append(track_events)
+
+        # Fusion par tick absolu, stable.
+        merged = []
+        for evs in per_track:
+            merged.extend(evs)
+        merged.sort(key=lambda e: e[0])
+
+        cur_tick = 0
+        cur_seconds = 0.0
+        for tick, idx, msg in merged:
+            dt = tick - cur_tick
+            cur_seconds += mido.tick2second(dt, ticks_per_beat, tempo)
+            cur_tick = tick
+            if msg.type == "set_tempo":
+                tempo = msg.tempo
+                continue
+            if idx != track_index:
+                continue
+            if msg.type == "note_on" and msg.velocity > 0:
+                events.append((cur_seconds, "on", msg.note))
+            elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+                events.append((cur_seconds, "off", msg.note))
+
+    # Construire les segments (note la plus aigue active).
+    segments = []
+    active = set()
+    last_time = 0.0
+    last_freq = 0
+    for time, typ, note in events:
+        dur_ms = int(round((time - last_time) * 1000))
+        if dur_ms > 0:
+            segments.append([last_freq, dur_ms])
+        if typ == "on":
+            active.add(note)
+        else:
+            active.discard(note)
+        last_freq = midi_to_freq(max(active)) if active else 0
+        last_time = time
+
+    # Fusion des segments consecutifs identiques.
+    merged_seg = []
+    for freq, dur in segments:
+        if merged_seg and merged_seg[-1][0] == freq:
+            merged_seg[-1][1] += dur
+        else:
+            merged_seg.append([freq, dur])
+
+    while merged_seg and merged_seg[0][0] == 0:
+        merged_seg.pop(0)
+    while merged_seg and merged_seg[-1][0] == 0:
+        merged_seg.pop()
+
+    return merged_seg
+
+
+def format_array(values, per_line=16):
+    if not values:
+        return ""
+    lines = []
+    for i in range(0, len(values), per_line):
+        chunk = values[i:i + per_line]
+        line = "  " + ", ".join(str(v) for v in chunk)
+        if i + per_line < len(values):
+            line += ","
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def build_sketch(segments, buzzer_pin: int, per_line: int) -> str:
+    freqs = [min(s[0], 65535) for s in segments]
+    durs = [max(1, min(s[1], 65535)) for s in segments]
+    note_count = len(segments)
+
+    lines = []
+    lines.append("#ifdef __AVR__")
+    lines.append("  #include <avr/pgmspace.h>")
+    lines.append("#endif")
+    lines.append("")
+
+    lines.append(f"const int buzzerPin = {buzzer_pin};")
+    lines.append(f"const int noteCount = {note_count};")
+    lines.append("")
+
+    lines.append("const uint16_t notes[noteCount] PROGMEM = {")
+    lines.append(format_array(freqs, per_line))
+    lines.append("};")
+    lines.append("")
+
+    lines.append("const uint16_t durations[noteCount] PROGMEM = {")
+    lines.append(format_array(durs, per_line))
+    lines.append("};")
+    lines.append("")
+
+    lines.append("void setup() {")
+    lines.append("  pinMode(buzzerPin, OUTPUT);")
+    lines.append("}")
+    lines.append("")
+    lines.append("void loop() {")
+    lines.append("  for (int i = 0; i < noteCount; i++) {")
+    lines.append("    uint16_t freq = pgm_read_word(&notes[i]);")
+    lines.append("    uint16_t dur = pgm_read_word(&durations[i]);")
+    lines.append("    if (freq > 0) {")
+    lines.append("      tone(buzzerPin, freq, dur);")
+    lines.append("    }")
+    lines.append("    delay(dur);")
+    lines.append("    noTone(buzzerPin);")
+    lines.append("  }")
+    lines.append("  delay(1500);")
+    lines.append("}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Convertit un MIDI en sketch Arduino pour buzzer.")
+    parser.add_argument("-i", "--input", required=True, help="Fichier MIDI d'entree (.mid)")
+    parser.add_argument("-o", "--output", default="song.ino", help="Sketch genere (defaut: song.ino)")
+    parser.add_argument("--pin", type=int, default=8, help="Broche du buzzer (defaut: 8)")
+    parser.add_argument("--per-line", type=int, default=16, help="Valeurs par ligne dans les tableaux (defaut: 16)")
+    parser.add_argument("--list-tracks", action="store_true",
+                        help="Affiche les pistes du MIDI et quitte (utile pour choisir --track)")
+    parser.add_argument("--track", type=int, default=None,
+                        help="Index de la piste a extraire. Sans cette option, choix automatique "
+                             "(piste de hauteur moyenne la plus elevee = melodie probable).")
+    parser.add_argument("--all-tracks", action="store_true",
+                        help="Mode skyline: fusionne toutes les pistes et garde la note la plus aigue.")
+    args = parser.parse_args()
+
+    if args.per_line < 1:
+        parser.error("--per-line must be >= 1")
+
+    if args.list_tracks:
+        list_tracks(args.input)
+        return
+
+    # Choix de la piste.
+    if args.all_tracks:
+        track_index = None
+        print("Mode: toutes les pistes fusionnees (skyline)")
+    elif args.track is not None:
+        track_index = args.track
+        print(f"Mode: piste {track_index} uniquement")
+    else:
+        infos = analyze_tracks(args.input)
+        track_index = pick_melody_track(infos)
+        if track_index is None:
+            print("Aucune piste melodique trouvee, fallback sur skyline.")
+        else:
+            info = infos[track_index]
+            label = info["name"] or info["instrument"] or "(sans nom)"
+            print(f"Piste auto: #{track_index} - {label} "
+                  f"(moy={info['mean_pitch']:.0f}, {info['note_count']} notes)")
+
+    segments = extract_segments(args.input, track_index=track_index)
+
+    sketch = build_sketch(segments, args.pin, per_line=args.per_line)
+    with open(args.output, "w") as f:
+        f.write(sketch)
+
+    flash_bytes = len(segments) * 4
+    print(f"OK -> {args.output}")
+    print(f"   {len(segments)} notes, ~{flash_bytes} octets de flash pour les tableaux")
+    if flash_bytes > 28000:
+        print("   ATTENTION: depasse la flash de l'Arduino Uno (~30 Ko).")
+
+
+if __name__ == "__main__":
+    main()
